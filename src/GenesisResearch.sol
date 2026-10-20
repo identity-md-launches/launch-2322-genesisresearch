@@ -10,17 +10,30 @@ interface IERC20Genesis {
 
 /// @dev IMD Intake v2's documented same-chain job request interface.
 interface IIMDIntake {
-    struct Callback { address target; bytes4 selector; }
+    struct Callback {
+        address target;
+        bytes4 selector;
+    }
     function requestWithFailure(
-        bytes32 action, bytes calldata body, Callback calldata callback,
-        bytes4 onFailure, address asset, uint256 amount
+        bytes32 action,
+        bytes calldata body,
+        Callback calldata callback,
+        bytes4 onFailure,
+        address asset,
+        uint256 amount
     ) external returns (bytes32 requestId);
 }
 
 /// @notice A bounded research budget and prediction registry for one committed GENESIS world.
 /// @dev Job callbacks establish provenance, NOT scientific correctness. No prediction prize settlement.
 contract GenesisResearch {
-    enum RequestState { Unknown, Pending, Succeeded, Failed, Abandoned }
+    enum RequestState {
+        Unknown,
+        Pending,
+        Succeeded,
+        Failed,
+        Abandoned
+    }
 
     struct ResearchRequest {
         bytes32 bodyHash;
@@ -98,11 +111,21 @@ contract GenesisResearch {
     event PredictionCommitted(uint256 indexed epoch, address indexed participant, bytes32 commitment);
     event PredictionRevealed(uint256 indexed epoch, address indexed participant, bytes32 predictionHash);
 
+    /// @dev The launch factory constructs this on an empty rehearsal chain where no other contract has
+    /// code, so the constructor takes the intake and asset as plain addresses. Their code is checked at
+    /// the first use that would move value (`_orderResearch`) and whenever the intake is replaced.
     constructor(
-        address owner_, address intake_, address asset_, bytes32 worldCommitment_, uint256 spendCap_, uint256 price_
+        address owner_,
+        address intake_,
+        address asset_,
+        bytes32 worldCommitment_,
+        uint256 spendCap_,
+        uint256 price_
     ) {
-        if (owner_ == address(0) || intake_.code.length == 0 || asset_.code.length == 0
-            || worldCommitment_ == bytes32(0) || price_ == 0 || spendCap_ < price_) {
+        if (
+            owner_ == address(0) || intake_ == address(0) || asset_ == address(0) || worldCommitment_ == bytes32(0)
+                || price_ == 0 || spendCap_ < price_
+        ) {
             revert InvalidConfiguration();
         }
         owner = owner_;
@@ -162,7 +185,11 @@ contract GenesisResearch {
     }
 
     /// @notice Buys only at the reviewed price, including when an owner changes price while the tx is pending.
-    function orderResearch(bytes calldata body, uint256 expectedPrice) external nonReentrant returns (bytes32 requestId) {
+    function orderResearch(bytes calldata body, uint256 expectedPrice)
+        external
+        nonReentrant
+        returns (bytes32 requestId)
+    {
         return _orderResearch(body, expectedPrice);
     }
 
@@ -175,6 +202,8 @@ contract GenesisResearch {
         if (usedBodies[bodyHash]) revert DuplicateBody();
         uint256 cost = price;
         if (cost > spendCap - spent) revert BudgetExceeded();
+        // Deferred from the constructor: never approve or pay an address that is not a live contract.
+        if (intake.code.length == 0 || asset.code.length == 0) revert InvalidConfiguration();
         uint256 beforeBalance = IERC20Genesis(asset).balanceOf(address(this));
         if (beforeBalance < cost) revert InsufficientFunds();
 
@@ -184,10 +213,15 @@ contract GenesisResearch {
         requestCount += 1;
         _tokenCall(abi.encodeCall(IERC20Genesis.approve, (intake, 0)));
         _tokenCall(abi.encodeCall(IERC20Genesis.approve, (intake, cost)));
-        requestId = IIMDIntake(intake).requestWithFailure(
-            RESEARCH_ACTION, body, IIMDIntake.Callback(address(this), this.onResult.selector),
-            this.onFailure.selector, asset, cost
-        );
+        requestId = IIMDIntake(intake)
+            .requestWithFailure(
+                RESEARCH_ACTION,
+                body,
+                IIMDIntake.Callback(address(this), this.onResult.selector),
+                this.onFailure.selector,
+                asset,
+                cost
+            );
         _tokenCall(abi.encodeCall(IERC20Genesis.approve, (intake, 0)));
         if (IERC20Genesis(asset).balanceOf(address(this)) != beforeBalance - cost) revert UnsupportedToken();
         if (requestId == bytes32(0) || requests[requestId].state != RequestState.Unknown) revert InvalidRequest();
@@ -208,7 +242,8 @@ contract GenesisResearch {
 
     /// @dev Fixed Intake v2 signature. An unsigned failure changes status, never refunds or pays value.
     function onFailure(bytes32 requestId, uint8 status, bytes32 reason, uint16, uint16, bytes calldata)
-        external nonReentrant
+        external
+        nonReentrant
     {
         if (status != 1 && status != 2) revert InvalidCallback();
         ResearchRequest storage research = _pending(requestId);
@@ -235,7 +270,9 @@ contract GenesisResearch {
 
     /// @notice Pins the holdout specification before participants commit. Targets cannot be replaced.
     function openEpoch(bytes32 targetHash, uint64 commitDeadline, uint64 revealDeadline)
-        external onlyOwner returns (uint256 epoch)
+        external
+        onlyOwner
+        returns (uint256 epoch)
     {
         if (targetHash == bytes32(0) || commitDeadline <= block.timestamp || revealDeadline <= commitDeadline) {
             revert InvalidEpoch();
@@ -246,12 +283,23 @@ contract GenesisResearch {
     }
 
     function predictionCommitment(uint256 epoch, address participant, bytes32 predictionHash, bytes32 salt)
-        public view returns (bytes32)
+        public
+        view
+        returns (bytes32)
     {
-        return keccak256(abi.encode(
-            PREDICTION_DOMAIN, block.chainid, address(this), worldCommitment,
-            epoch, epochs[epoch].targetHash, participant, predictionHash, salt
-        ));
+        return keccak256(
+            abi.encode(
+                PREDICTION_DOMAIN,
+                block.chainid,
+                address(this),
+                worldCommitment,
+                epoch,
+                epochs[epoch].targetHash,
+                participant,
+                predictionHash,
+                salt
+            )
+        );
     }
 
     function commitPrediction(uint256 epoch, bytes32 commitment) external {
@@ -272,8 +320,10 @@ contract GenesisResearch {
         if (block.timestamp < target.commitDeadline) revert TooEarly();
         if (block.timestamp >= target.revealDeadline) revert RevealClosed();
         Prediction storage prediction = predictions[epoch][msg.sender];
-        if (prediction.revealed || prediction.commitment == bytes32(0) || predictionHash == bytes32(0)
-            || prediction.commitment != predictionCommitment(epoch, msg.sender, predictionHash, salt)) {
+        if (
+            prediction.revealed || prediction.commitment == bytes32(0) || predictionHash == bytes32(0)
+                || prediction.commitment != predictionCommitment(epoch, msg.sender, predictionHash, salt)
+        ) {
             revert InvalidPrediction();
         }
         prediction.predictionHash = predictionHash;
@@ -281,12 +331,15 @@ contract GenesisResearch {
         emit PredictionRevealed(epoch, msg.sender, predictionHash);
     }
 
-    function remainingBudget() external view returns (uint256) { return spendCap - spent; }
+    function remainingBudget() external view returns (uint256) {
+        return spendCap - spent;
+    }
 
     function _pending(bytes32 requestId) private view returns (ResearchRequest storage research) {
         research = requests[requestId];
-        if (research.state != RequestState.Pending || pendingRequestId != requestId
-            || msg.sender != research.intake) revert InvalidCallback();
+        if (research.state != RequestState.Pending || pendingRequestId != requestId || msg.sender != research.intake) {
+            revert InvalidCallback();
+        }
     }
 
     function _tokenCall(bytes memory data) private {
