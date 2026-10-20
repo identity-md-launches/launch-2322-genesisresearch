@@ -1,0 +1,17 @@
+{
+  "kind": "evm_contracts",
+  "contracts": [
+    {
+      "contract": "GenesisResearch",
+      "constructorArgs": [
+        "$owner",
+        "0xa43e6f75ee006411f79ac1c84120606c2330de82",
+        "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7",
+        "0x190996ed4ed39d38bd9cf088077f0f9aa4afc5d926df034f0b4f792259599fac",
+        "500000000000000000",
+        "500000000000000000"
+      ]
+    }
+  ],
+  "notes": "Ethereum mainnet (chain id 1): deploy exactly one existing GenesisResearch as the onchain research layer of GENESIS (https://imdgenesis.xyz). Constructor order: owner, intake, asset, worldCommitment, spendCap, price. $owner resolves to requester wallet 0x550011cadcc758969391050241b2fc43ed1a4b97; ownership is immutable, with no factory, worker or service role. The owner controls researcher authorization, idle intake replacement, price within the immutable cap, epoch creation, stale-request abandonment and unused-asset withdrawal. Intake and asset are the specified existing contracts, not additional deployments. Compile with Solidity 0.8.26, Paris, optimizer enabled with 200 runs, bytecode_hash none. Preserve the accepted source's budget, authorization, callback authentication, replay, reentrancy and commit/reveal protections. Start unfunded with zero native value and zero IMD funding; no approvals, transfers, research orders, extra jobs or post-deployment calls are authorized. No token, pool, distributor, proxy or website is deployed. This manifest is predeployment: the onchain GenesisResearch address is assigned by the launch and published in the confirmed deployment handoff and IMD launch page; no address is asserted here. Earlier paid job 62c73a84-26cf-4378-962e-c72e55ceb81d was a separate direct Intake request, not prior registry use; this launch makes no retroactive commitment-timing claim. Callbacks establish provenance, not scientific correctness. Scientific scoring stays offchain and prize-recipient rules are external to this contract. No secret seeds, wallet keys or environment files are included."
+}
